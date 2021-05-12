@@ -20,7 +20,7 @@ library(ComplexHeatmap)
 ```
 Load files with day 0 comparison
 ```{r}
-dir <- "/scratch/bacint/jdeleuw/ananse/influence_data2/day0_comp/"
+dir <- "/scratch/bacint/jdeleuw/ananse/influence_data/day0_comp/"
 
 influence_D0vsD07 <- read.csv2(paste(dir, "day0vsday07.txt", sep = ''), 
                    		header = TRUE, 
@@ -49,7 +49,7 @@ influence_D0vsKC <- read.csv2(paste(dir, "day0vsKC.txt", sep = ''),
 ```
 Load files with day 0 comparisons in the other way
 ```{r}
-dir <- "/scratch/bacint/jdeleuw/ananse/influence_data2/reverse_day0_comp/"
+dir <- "/scratch/bacint/jdeleuw/ananse/influence_data/reverse_day0_comp/"
 
 influence_reverse_D07vsD0 <- read.csv2(paste(dir, "day07vsday0.txt", sep = ''), 
                                     		header = TRUE, 
