@@ -1,0 +1,45 @@
+---
+title: "TPM_script"
+author: "Jori de Leuw"
+date: "March 30, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Load files
+```{r}
+TPM_df <- read.csv('/scratch/bacint/jdeleuw/KC_RNA/results/counts/GRCh38-TPM.tsv', sep = '\t')
+col_data <- read.csv('/scratch/bacint/jdeleuw/ananse/expression_data/col_data.tsv', sep = '\t')
+```
+```{r}
+TPM_df['TP63',]
+```
+
+
+Change column names
+```{r}
+row.names(TPM_df) <- TPM_df$gene
+TPM_df$gene <- NULL
+colnames(TPM_df) <- col_data$descriptive_name
+
+
+TPM_df$target_id <- row.names(TPM_df)
+row.names(TPM_df) <- NULL
+```
+write table to file column by column 
+```{r}
+for (i in 2:length(TPM_df)-1) {
+  TPM_df_column <- TPM_df[i]
+  file_name <- colnames(TPM_df_column)
+
+  ananse_TPM <- cbind(TPM_df[length(TPM_df)],  TPM_df_column)
+
+  colnames(ananse_TPM) <- c('target_id', 'tpm')
+  output_dir <- paste('/scratch/bacint/jdeleuw/ananse/expression_data/TPM/', file_name, '_TPM.tsv', sep = '')
+
+  write.table(ananse_TPM, file = output_dir, sep = '\t',quote = F, row.names = FALSE)
+}
+```
+

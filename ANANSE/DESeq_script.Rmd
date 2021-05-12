@@ -1,0 +1,81 @@
+---
+title: "Deseq_analysis"
+author: "Jori de Leuw"
+date: "April 1, 2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
+```
+Load packages:
+```{r}
+library(DESeq2)
+library(ashr)
+```
+Load the count_table:
+```{r}
+count_table <- read.csv2('/scratch/bacint/jdeleuw/KC_RNA/results/counts/GRCh38-counts.tsv', header = TRUE, sep = '\t', row.names= 1, stringsAsFactors=FALSE)
+```
+Load the col_table:
+```{r}
+col_table <- read.csv2('/scratch/bacint/jdeleuw/ananse/expression_data/col_data.tsv', header = TRUE, sep = '\t', row.names= 1, stringsAsFactors=FALSE)
+```
+run DESeq:
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = count_table,
+                              colData = col_table,
+                              design = ~Stage)
+dds <- DESeq(dds)
+```
+Design differential expression data where everything is compared to day0:
+```{r}
+Stages <- unique(col_table$Stage)
+for (i in 2:length(Stages)){ 
+  diff_genes <- lfcShrink(dds, alpha = 0.05, contrast = c("Stage",toString(Stages[i]), "Day0"), type="ashr")
+
+  DEgenes <- data.frame(resid = row.names(diff_genes), 
+                        log2FoldChange = diff_genes$log2FoldChange,
+                        padj = diff_genes$padj)
+  DEgenes <- na.omit(DEgenes)
+  
+  output_dir <- paste('/scratch/bacint/jdeleuw/second_ananse/expression_data/DESeq/', 'DEgenes_Day0vs', Stages[i], '.tsv', sep = '')      
+
+  write.table(DEgenes, file = output_dir, sep = '\t',quote = F, row.names = FALSE)
+}
+```
+Design differential expression data where everything is compared with day 0 in reverse:
+```{r}
+Stages <- unique(col_table$Stage)
+for (i in 2:length(Stages)){ 
+  diff_genes <- lfcShrink(dds, alpha = 0.05, contrast = c("Stage","Day0", toString(Stages[i])), type="ashr")
+
+  DEgenes <- data.frame(resid = row.names(diff_genes), 
+                        log2FoldChange = diff_genes$log2FoldChange,
+                        padj = diff_genes$padj)
+  DEgenes <- na.omit(DEgenes)
+  
+  output_dir <- paste('/scratch/bacint/jdeleuw/second_ananse/expression_data/DESeq/', 'Reverse_DEgenes_', Stages[i], 'vsDay0.tsv', sep = '')      
+
+  write.table(DEgenes, file = output_dir, sep = '\t',quote = F, row.names = FALSE)
+}
+```
+Design differential expression data where everything is compared in chronological order:
+```{r}
+Stages <- unique(col_table$Stage)
+for (i in 2:length(Stages)-1){ 
+  diff_genes <- lfcShrink(dds, alpha = 0.05, contrast = c("Stage",toString(Stages[i+1]), toString(Stages[i])), type="ashr")
+
+  DEgenes <- data.frame(resid = row.names(diff_genes),
+                        log2FoldChange = diff_genes$log2FoldChange,
+                        padj = diff_genes$padj)
+  DEgenes <- na.omit(DEgenes)
+
+  output_dir <- paste('/scratch/bacint/jdeleuw/second_ananse/expression_data/DESeq/', 'Chron_DEgenes_', Stages[i], 'vs', toString(Stages[i+1]), '.tsv', sep = '')
+
+  write.table(DEgenes, file = output_dir, sep = '\t',quote = F, row.names = FALSE)
+}
+```
