@@ -1,0 +1,203 @@
+---
+title: "chron_comp_heatmap"
+author: "Jori de Leuw"
+date: "May 6, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
+```
+
+Load packages
+```{r}
+library(DESeq2)
+library(circlize)
+library(RColorBrewer)
+library(ComplexHeatmap)
+```
+Load files with day 0 comparison
+```{r}
+dir <- "/scratch/bacint/jdeleuw/ananse/influence_data2/chron_comp/"
+
+influence_D0vsD07 <- read.csv2(paste(dir, "day0vsday07.txt", sep = ''), 
+                   		header = TRUE, 
+                    		sep = '\t',  
+                    		stringsAsFactors=FALSE)
+influence_D07vsD14 <- read.csv2(paste(dir, "day07vsday14.txt", sep = ''), 
+                     		header = TRUE, 
+                     		sep = '\t', 
+                     		stringsAsFactors=FALSE)
+influence_D14vsD21 <- read.csv2(paste(dir, "day14vsday21.txt", sep = ''), 
+                      		header = TRUE, 
+                      		sep = '\t', 
+                      		stringsAsFactors=FALSE)
+influence_D21vsD43 <- read.csv2(paste(dir, "day21vsday43.txt", sep = ''), 
+                      		header = TRUE, 
+                      		sep = '\t', 
+                      		stringsAsFactors=FALSE)
+influence_D43vsD60 <- read.csv2(paste(dir, "day43vsday60.txt", sep = ''), 
+                      		header = TRUE, 
+                      		sep = '\t', 
+                      		stringsAsFactors=FALSE)
+influence_D60vsKC <- read.csv2(paste(dir, "day60vsKC.txt", sep = ''), 
+                    		header = TRUE, 
+                     		sep = '\t', 
+                     		stringsAsFactors=FALSE)
+```
+Filter TF with minimum influence score:
+```{r}
+min_Influence_score <- 0.95
+comparisons <- list(influence_D0vsD07, influence_D07vsD14, influence_D14vsD21, influence_D21vsD43, influence_D43vsD60, influence_D60vsKC)
+
+res <- lapply(comparisons, function(x) subset(x, sumScaled >= min_Influence_score))
+```
+Get list of TFs of interest
+```{r}
+Number <- 0
+for (i in 1:length(res)) {
+  df <- res[[i]]
+  if(Number == 0) {
+    TFs_of_interest <- df
+    Number <- 1
+  }
+  else {
+    TFs_of_interest <- rbind(TFs_of_interest, df)
+  }
+}
+
+Filtered_TFs <- sort(unique(TFs_of_interest$factor))
+write.table(Filtered_TFs, file = '/scratch/bacint/jdeleuw/ananse/analysis/interesting_TFs.csv', row.names = FALSE, col.names = FALSE)
+```
+Make data frame with filtered TFs and influence score for each comparison:
+```{r}
+influence_score <- data.frame(factor = Filtered_TFs,
+                              D0vsD7 = 0,
+                              D7vsD14 = 0,
+                              D14vsD21 = 0,
+                              D21vsD43 = 0,
+                              D43vsD60 = 0,
+                              D60vsKC = 0
+			                        )
+for (i in 1:length(res)) {
+  df <- comparisons[[i]]
+  column_index <- i + 1
+
+  influence_score[column_index] <- rev(merge(influence_score, df[c('factor', 'sumScaled')], by = 'factor', all.x = TRUE))[1]
+}
+#convert NA values to 0
+influence_score[is.na(influence_score)] <- 0
+#convert data to numeric
+influence_score[,2:length(influence_score)] <- as.data.frame(sapply(influence_score[,2:length(influence_score)], as.numeric))
+#set row names
+row.names(influence_score) <- influence_score$factor
+influence_score$factor <- NULL
+```
+Make heatmap
+```{r}
+color_influence <- colorRamp2(c(0,0.5,1), c("blue", "white", "red"))
+
+set.seed(100)
+
+hm_influence <- Heatmap(influence_score,
+              col = color_influence,
+              row_gap= unit(3,"mm"),
+              column_gap = unit(3,"mm"),
+              column_title = 'TF Influence',
+              name = "Influence score",
+              row_title = "TFs",
+              show_row_names = T,
+              clustering_distance_rows = "maximum",                 #based on the maximum absolute deviation
+              show_row_dend = FALSE,
+              row_dend_reorder = TRUE,
+              row_km = 6,
+              column_order = order(as.numeric(gsub("column", "", colnames(influence_score))))
+              )
+# pdf("/scratch/bacint/jdeleuw/ananse/analysis/chron_influence_score_HM.pdf",width=12,height=12,paper='special', useDingbats=FALSE)
+draw(hm_influence)
+# dev.off
+```
+Load Count_data:
+```{r}
+count_data <- read.csv2('/scratch/bacint/jdeleuw/KC_RNA/results/counts/GRCh38-counts.tsv', header = TRUE, sep = '\t', row.names= 1, stringsAsFactors=FALSE)
+```
+Load column data:
+```{r}
+col_data <- read.csv('/scratch/bacint/jdeleuw/ananse/expression_data/col_data.tsv', sep = "\t", row.names= 1, header = TRUE)
+```
+
+run Deseq2:
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = count_data,
+                              colData = col_data,
+                              design = ~ Stage)
+dds <- DESeq(dds)
+```
+Normalize the counts
+```{r}
+rld <- rlog(dds, blind=FALSE)           #normalize counts
+```
+Filter counts from TFs of interest
+```{r}
+list_TFs <- read.csv2("/scratch/bacint/jdeleuw/ananse/analysis/interesting_TFs.csv", 
+                            header = FALSE, 
+                            sep = '\t',  
+                            stringsAsFactors=FALSE)
+
+filtered_counts <- assay(rld)[row.names(assay(rld)) %in% list_TFs$V1 , ]
+#z <- mat - rowMeans(mat)
+normalized_counts <- data.frame(scale(filtered_counts))
+```
+Remove two duplicate of KCs and change the column names to more compehensive names:
+```{r}
+counts <- normalized_counts[, -c(13:14)]
+colnames(counts) <- as.matrix(col_data$descriptive_name[-c(13:14)])[,1]
+```
+
+```{r}
+avg_counts <- data.frame(row.names = row.names(counts),
+                      D0 = apply(counts, 1, function(x) mean(as.numeric(x[1:2]))),
+                      D7 = apply(counts, 1, function(x) mean(as.numeric(x[3:4]))),
+                      D14 = apply(counts, 1, function(x) mean(as.numeric(x[5:6]))),
+                      D21 = apply(counts, 1, function(x) mean(as.numeric(x[7:8]))),
+                      D43 = apply(counts, 1, function(x) mean(as.numeric(x[9:10]))),
+                      D60 = apply(counts, 1, function(x) mean(as.numeric(x[11:12]))),
+                      KC = apply(counts, 1, function(x) mean(as.numeric(x[13:14])))
+           )
+```
+Make Heatmap
+```{r}
+color_counts <- colorRamp2(c(-2,0,2), c("#998ec3","white","#f1a340"))
+set.seed(100)
+hm_counts <- Heatmap(avg_counts,
+              col = color_counts,
+              row_gap= unit(3,"mm"),
+              column_title = 'Expression',
+              name = "Z-score normalized counts",
+              row_title = "TFs",
+              show_row_names = T,
+              clustering_distance_rows = "maximum",                 #based on the maximum absolute deviation
+              show_row_dend = FALSE,
+              row_dend_reorder = TRUE,
+              column_order = order(as.numeric(gsub("column", "", colnames(avg_counts))))
+              )
+# pdf("/scratch/bacint/jdeleuw/ananse/analysis/chron_TPM_HM.pdf",width=12,height=12,paper='special', useDingbats=FALSE)
+draw(hm_counts)
+# dev.off
+```
+merge heatmaps together into one figure:
+```{r}
+set.seed(100)
+hmlist <- hm_influence + hm_counts
+pdf("/scratch/bacint/jdeleuw/ananse/analysis/chron_influence_normCounts_HM.pdf",width=12,height=12,paper='special', useDingbats=FALSE)
+draw(hmlist,
+     column_title = "Comparisons",
+     column_title_side = "bottom",
+     ht_gap = unit(3, "mm"),
+     main = 'Influence score'
+     )
+dev.off
+```
+```
+
