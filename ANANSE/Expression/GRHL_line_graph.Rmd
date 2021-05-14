@@ -1,0 +1,107 @@
+---
+title: "TPM_plot"
+author: "Jori de Leuw"
+date: "May 14, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Load packages:
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+```
+Load TPM files and filter TFs of interest from the dfs:
+```{r}
+dir <- '/scratch/bacint/jdeleuw/ananse/expression_data/TPM/'
+col_data <- read.csv('/scratch/bacint/jdeleuw/ananse/expression_data/col_data.tsv', sep = '\t')
+
+for (i in 1:length(col_data$descriptive_name)) {
+  sample_name <- paste(col_data$descriptive_name[i], '_TPM', sep = '')
+  path <- paste(dir, sample_name, '.tsv', sep = '')
+  
+  assign(sample_name,
+         read.csv(path, sep = '\t'))
+  
+  df <- get(sample_name)
+  
+  output_name <- paste('filtered_', sample_name, sep = '')
+  assign(output_name,
+         df %>% filter(df == 'GRHL1' | df == 'GRHL2'))
+}
+```
+Calculate the average TPM between duplicates:
+```{r}
+GRHL1_list <- c()
+GRHL2_list <- c()
+min_GRHL1 <- c()
+max_GRHL1 <- c()
+min_GRHL2 <- c()
+max_GRHL2 <- c()
+
+for (i in 1:length(unique(col_data$Stage))) {
+  if (!(unique(col_data$Stage)[i] == 'AdultKC')) {
+    duplicate_A <- get(paste('filtered_', unique(col_data$Stage)[i], 'A_TPM', sep = ''))
+    duplicate_B <- get(paste('filtered_', unique(col_data$Stage)[i], 'B_TPM', sep = ''))
+    
+    value1 <- unlist((duplicate_A[duplicate_A$target_id == 'GRHL1',][2] + duplicate_B[duplicate_B$target_id == 'GRHL1',][2]) / 2)
+    GRHL1_list <- c(GRHL1_list, value1)
+    min_GRHL1 <- c(min_GRHL1, min(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL1',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL1',][2]))))
+    max_GRHL1 <- c(max_GRHL1, max(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL1',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL1',][2]))))
+    
+    value2 <- unlist((duplicate_A[duplicate_A$target_id == 'GRHL2',][2] + duplicate_B[duplicate_B$target_id == 'GRHL2',][2]) / 2)
+    GRHL2_list <- c(GRHL2_list, value2)
+    min_GRHL2 <- c(min_GRHL2, min(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL2',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL2',][2]))))
+    max_GRHL2 <- c(max_GRHL2, max(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL2',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL2',][2]))))
+  
+  }
+  else {
+    duplicate_A <- get('filtered_PKC19A_TPM')
+    duplicate_B <- get('filtered_PKC19B_TPM')
+    
+    value1 <- unlist((duplicate_A[duplicate_A$target_id == 'GRHL1',][2] + duplicate_B[duplicate_B$target_id == 'GRHL1',][2]) / 2)
+    GRHL1_list <- c(GRHL1_list, value1)
+    min_GRHL1 <- c(min_GRHL1, min(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL1',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL1',][2]))))
+    max_GRHL1 <- c(max_GRHL1, max(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL1',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL1',][2]))))
+    
+    value2 <- unlist((duplicate_A[duplicate_A$target_id == 'GRHL2',][2] + duplicate_B[duplicate_B$target_id == 'GRHL2',][2]) / 2)
+    GRHL2_list <- c(GRHL2_list, value2)
+    min_GRHL2 <- c(min_GRHL2, min(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL2',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL2',][2]))))
+    max_GRHL2 <- c(max_GRHL2, max(c(unlist(duplicate_A[duplicate_A$target_id == 'GRHL2',][2]), unlist(duplicate_B[duplicate_B$target_id == 'GRHL2',][2]))))
+  }
+}
+avg_TPM <- setNames(data.frame(matrix(ncol = 7, nrow = length(unique(col_data$Stage)))), c('Day','GRHL1', 'GRHL2', 'Min_GRHL1', 'Max_GRHL1', 'Min_GRHL2', 'Max_GRHL2'))
+avg_TPM[1] <- factor(unique(col_data$Stage), levels = as.character(unique(col_data$Stage)))
+avg_TPM[2] <- GRHL1_list
+avg_TPM[3] <- GRHL2_list
+avg_TPM[4] <- min_GRHL1
+avg_TPM[5] <- max_GRHL1
+avg_TPM[6] <- min_GRHL2
+avg_TPM[7] <- max_GRHL2
+```
+Plot the avg TPM in a linegraph
+```{r}
+plot_GRHL1 <- ggplot(data = avg_TPM, aes(x = Day, group = 1)) +
+                     geom_line(aes(y = GRHL1)) +
+                     geom_point(aes(y = GRHL1)) +
+                     geom_errorbar(aes(ymin = Min_GRHL1, ymax = Max_GRHL1), width = .2) +
+                     ylab('TPM') +
+                     ggtitle('TPM GRHL1') +
+                     theme(plot.title = element_text(hjust = 0.5))
+
+plot_GRHL2 <- ggplot(data = avg_TPM, aes(x = Day, group = 1)) +
+                     geom_line(aes(y = GRHL2)) +
+                     geom_point(aes(y = GRHL2)) +
+                     geom_errorbar(aes(ymin = Min_GRHL2, ymax = Max_GRHL2), width = .2) +
+                     ylab('TPM') +
+                     ggtitle('TPM GRHL2') +
+                     theme(plot.title = element_text(hjust = 0.5))
+
+pdf('/scratch/bacint/jdeleuw/ananse/analysis/GRHL_TPM.pdf',width=12,height=6,paper='special', useDingbats=FALSE)
+grid.arrange(plot_GRHL1, plot_GRHL2, nrow = 1)
+dev.off()
+```
+
