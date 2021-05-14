@@ -246,7 +246,7 @@ numeric_interaction_avg <- as.data.frame(apply(sorted_interaction_avg, 2, functi
 row.names(numeric_interaction_avg) <- row.names(sorted_interaction_avg)
 numeric_interaction_avg[is.na(numeric_interaction_avg)] <- 0 
 
-color_interaction <- colorRamp2(c(0,0.5,1), c("purple", "white", "green"))
+color_interaction <- brewer.pal(9, 'Greens')
 
 set.seed(100)
 hm_interactions <- Heatmap(numeric_interaction_avg,
