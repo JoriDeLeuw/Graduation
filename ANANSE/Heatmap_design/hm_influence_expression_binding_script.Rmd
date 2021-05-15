@@ -1,5 +1,5 @@
 ---
-title: "temp"
+title: "Heatmap R script"
 author: "Jori de Leuw"
 date: "March 11, 2021"
 output:
